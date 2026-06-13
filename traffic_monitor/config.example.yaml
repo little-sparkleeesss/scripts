@@ -1,0 +1,32 @@
+sftp:
+  host: <your_sftp_host>
+  port: 22
+  username: <your_sftp_user>
+  private_key: "../assets/keys/id_ed25519"  # 或使用 password: xxx 替代
+  known_host_key: "<your_ssh_host_key>"
+  remote_path: /var/lib/vnstat/vnstat.db
+
+postgres:
+  host: <your_pg_host>
+  port: 5432
+  user: monitor
+  password: "<YOUR_PASSWORD>"
+  dbname: monitor
+  table: network_traffic
+  ssl_mode: "verify-full"
+  ssl_root_cert: "../assets/certs/Internal_Root_CA.crt"
+  mtls:
+    enabled: false
+    client_cert: "traffic_monitor/certs/client.crt"
+    client_key: "traffic_monitor/certs/client.key"
+
+sync:
+  sqlite_table: hour
+  primary_key: id
+  columns:
+    - id
+    - date
+    - rx
+    - tx
+  column_mapping:
+    date: timestamp   # SQLite 中的 date 映射到 PostgreSQL 中的 timestamp

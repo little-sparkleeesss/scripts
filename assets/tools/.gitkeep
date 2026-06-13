@@ -1,0 +1,4 @@
+将便携 PostgreSQL 客户端 (postgres18/) 放置在此目录下。
+来源：https://www.postgresql.org/download/
+包含：bin/pg_dump, bin/pg_dumpall, bin/psql, bin/pg_restore 等
+以及对应的 lib/ 目录。

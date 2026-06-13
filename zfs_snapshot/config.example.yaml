@@ -1,0 +1,18 @@
+ssh:
+  host: "<your_ssh_host>"
+  port: 22
+  username: "<your_ssh_user>"
+  password: ""
+  private_key: "../assets/keys/id_ed25519"
+  private_key_passphrase: ""
+  known_host_key: "<your_ssh_host_key>"
+
+snapshot:
+  prefix: "auto"
+  retention_days: 30
+
+  datasets:
+    - name: "<your_zfs_dataset_1>"
+      recursive: true
+    - name: "<your_zfs_dataset_2>"
+      recursive: false

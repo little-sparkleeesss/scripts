@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Test artifacts
+.coverage
+htmlcov/
+
+# Logs / temp
+*.log
+*.tmp
+/tmp/
+
+# OS junk
+$RECYCLE.BIN/
+
+# Sensitive / binary assets (keep directory, ignore contents)
+assets/certs/*
+!assets/certs/.gitkeep
+assets/keys/*
+!assets/keys/.gitkeep
+assets/tools/*
+!assets/tools/.gitkeep
+
+# Private config files (use .example templates to create your own)
+smart_monitor/config.yaml
+traffic_monitor/config.yaml
+vaultwarden_sync/config.yaml
+zfs_snapshot/config.yaml
+pg_dumpall/pg_backup.conf
+pg_start_backup/pg_backup.conf

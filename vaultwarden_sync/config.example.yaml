@@ -1,0 +1,36 @@
+source_db:
+  ssh:
+    host: "<your_source_ssh_host>"
+    port: 22
+    user: "<your_ssh_user>"
+    key: "../assets/keys/id_ed25519"   # 可选
+    password: ""              # 可选
+    known_host_key: "<your_ssh_host_key>"
+
+  db:
+    host: "<your_source_pg_host>"
+    port: 5432
+    dbname: "vaultwarden"
+    user: "vaultwarden"
+    password: "<YOUR_PASSWORD>"
+    sslmode: "disable"
+
+local_target_db:
+  host: "<your_target_pg_host>"
+  port: 5432
+  dbname: "vaultwarden_mirror"
+  user: "vaultwarden"
+  password: "<YOUR_PASSWORD>"
+  sslmode: "disable"
+
+  ssh:
+    host: "<your_target_ssh_host>"
+    port: 22
+    user: "<your_ssh_user>"
+    key: "../assets/keys/id_ed25519"
+    known_host_key: "<your_ssh_host_key>"
+
+options:
+  include_schema: true
+  include_data: true
+  clean: true

@@ -1,0 +1,4 @@
+将 SSH 私钥文件 id_ed25519 放置在此目录下。
+私钥需与各脚本 config 中的 known_host_key 对应。
+
+获取方式：ssh-keygen -t ed25519 -f id_ed25519

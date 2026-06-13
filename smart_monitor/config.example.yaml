@@ -1,0 +1,21 @@
+ssh:
+  host: "<your_ssh_host>"
+  port: 22
+  username: "<your_ssh_user>"
+  password: ""
+  private_key: "../assets/keys/id_ed25519"
+  private_key_passphrase: ""
+  known_host_key: "<your_ssh_host_key>"
+
+postgres:
+  host: "<your_pg_host>"
+  port: 5432
+  database: "monitor"
+  user: "monitor"
+  password: "<YOUR_PASSWORD>"
+  table: "smart_stats"
+
+devices:
+  - cmd: "<your_smartctl_command_1>"
+  - cmd: "<your_smartctl_command_2>"
+  - cmd: "<your_smartctl_command_3>"
