@@ -117,7 +117,19 @@ def sync_data(cfg, tz_offset):
                 log.warning(f"跳过非法时间格式: {ts_str} ({e})")
                 continue
 
-            if last_sync_ts is None or dt > last_sync_ts:
+            if last_sync_ts is None:
+                if current_max_id > 0:
+                    log.warning(
+                        "last_sync_ts 为 None 但表中已有 %d 条记录，"
+                        "跳过全量同步以避免重复数据",
+                        current_max_id,
+                    )
+                    continue
+                include_row = True
+            else:
+                include_row = dt > last_sync_ts
+
+            if include_row:
                 row_list[id_index] = next_id
                 next_id += 1
                 row_list[ts_index] = dt
