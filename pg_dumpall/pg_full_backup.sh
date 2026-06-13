@@ -81,7 +81,7 @@ PSQL_BIN=$(get_binary "psql" "${PG_BIN_DIR:-}")
   -c "SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid();" || true
 
 if ! "$PG_DUMPALL" -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" --no-password \
-    | stdbuf -e0 "$ZSTD" -T0 --ultra -${COMPRESS_LEVEL} -o "${backup_file}"; then
+    | "$ZSTD" -v -T0 --ultra -${COMPRESS_LEVEL} -o "${backup_file}"; then
     echo "ERROR: 备份失败！" >&2; exit 1
 fi
 unset PGPASSWORD
