@@ -3,15 +3,17 @@ set -euo pipefail
 
 safe_source() {
     local conf="$1"
-    local line
+    local line stripped
     local quoted_re='^[A-Z_][A-Z0-9_]*="[^"]*"$'
     local unquoted_re='^[A-Z_][A-Z0-9_]*=[^"`$()|&;<>]*$'
     while IFS= read -r line || [ -n "$line" ]; do
-        [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
-        if [[ "${line}" =~ ${quoted_re} ]]; then
-            declare "${line}"
-        elif [[ "${line}" =~ ${unquoted_re} ]]; then
-            declare "${line}"
+        stripped="${line%%#*}"
+        stripped="${stripped%"${stripped##*[![:space:]]}"}"
+        [[ -z "${stripped}" ]] && continue
+        if [[ "${stripped}" =~ ${quoted_re} ]]; then
+            declare "${stripped}"
+        elif [[ "${stripped}" =~ ${unquoted_re} ]]; then
+            declare "${stripped}"
         else
             printf "ERROR: 配置文件包含不安全的行: %s\n" "${line}" >&2
             return 1
