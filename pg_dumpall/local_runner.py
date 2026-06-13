@@ -1,5 +1,4 @@
 import os
-import select
 import subprocess
 import sys
 
@@ -25,33 +24,15 @@ def main():
             ["bash", script_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=0,
             env=os.environ.copy(),
         )
+        stdout, stderr = process.communicate()
 
-        while True:
-            rlist, _, _ = select.select(
-                [process.stdout, process.stderr], [], [], 0.5
-            )
-            for f in rlist:
-                line = f.readline().decode("utf-8", errors="ignore")
-                if line:
-                    if f == process.stdout:
-                        print(f"  [STDOUT] {line.strip()}")
-                    else:
-                        print(
-                            f"\033[31m  [STDERR] {line.strip()}\033[0m",
-                            file=sys.stderr,
-                        )
+        for line in stderr.decode("utf-8", errors="ignore").splitlines():
+            logger.error(f"[STDERR] {line}")
 
-            if process.poll() is not None:
-                break
-
-        for f in (process.stdout, process.stderr):
-            for line in f.readlines():
-                line = line.decode("utf-8", errors="ignore")
-                if line:
-                    print(f"  [OUTPUT] {line.strip()}")
+        for line in stdout.decode("utf-8", errors="ignore").splitlines():
+            logger.info(f"[STDOUT] {line}")
 
         if process.returncode == 0:
             logger.info("所有流水线阶段执行成功。")
