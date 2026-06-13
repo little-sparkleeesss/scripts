@@ -70,54 +70,52 @@ def parse_smart_json(json_text):
     return result
 
 
-def _ensure_schema(conn, table):
+def _ensure_schema(conn, table, sample_data):
     safe_table = table.replace('"', '""')
     cur = conn.cursor()
     cur.execute("""
-        SELECT column_name, data_type FROM information_schema.columns
+        SELECT column_name FROM information_schema.columns
         WHERE table_name = %s AND table_schema = 'public'
     """, (table,))
-    existing = {row[0]: row[1] for row in cur.fetchall()}
-    cur.close()
-    return safe_table, existing
+    existing = {row[0] for row in cur.fetchall()}
 
-
-def _add_columns(conn, safe_table, existing, data):
-    cur = conn.cursor()
     if not existing:
         log.info("创建新表结构...")
         create_fields = []
-        for col in data.keys():
-            if col == "timestamp":
-                col_type = "TIMESTAMPTZ"
-            elif col in ("serial", "model"):
-                col_type = "TEXT"
-            else:
-                col_type = "JSONB"
-            create_fields.append(f'"{col}" {col_type}')
+        for col in sample_data:
+            ct = "TIMESTAMPTZ" if col == "timestamp" \
+                else "TEXT" if col in ("serial", "model") \
+                else "JSONB"
+            create_fields.append(f'"{col}" {ct}')
         cur.execute(f'''
             CREATE TABLE IF NOT EXISTS "{safe_table}" (
                 id SERIAL PRIMARY KEY,
                 {", ".join(create_fields)}
             );
         ''')
-    else:
-        if "id" not in existing:
-            log.info("添加主键列 id...")
-            cur.execute(
-                f'ALTER TABLE "{safe_table}" ADD COLUMN IF NOT EXISTS '
-                f'id SERIAL PRIMARY KEY'
-            )
-        for col in data.keys():
-            if col not in existing:
-                col_type = "TIMESTAMPTZ" if col == "timestamp" \
-                    else "TEXT" if col in ("serial", "model") \
-                    else "JSONB"
-                log.info(f"添加缺失字段: {col} ({col_type})")
-                cur.execute(
-                    f'ALTER TABLE "{safe_table}" ADD COLUMN IF NOT EXISTS '
-                    f'"{col}" {col_type}'
-                )
+        existing = {"id"} | set(sample_data.keys())
+    elif "id" not in existing:
+        log.info("添加主键列 id...")
+        cur.execute(f'ALTER TABLE "{safe_table}" ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY')
+        existing.add("id")
+
+    cur.close()
+    conn.commit()
+    return safe_table, existing
+
+
+def _add_missing_columns(conn, safe_table, existing, data):
+    missing = [col for col in data if col not in existing]
+    if not missing:
+        return
+    cur = conn.cursor()
+    for col in missing:
+        ct = "TIMESTAMPTZ" if col == "timestamp" \
+            else "TEXT" if col in ("serial", "model") \
+            else "JSONB"
+        log.info(f"添加缺失字段: {col} ({ct})")
+        cur.execute(f'ALTER TABLE "{safe_table}" ADD COLUMN IF NOT EXISTS "{col}" {ct}')
+        existing.add(col)
     cur.close()
     conn.commit()
 
@@ -148,7 +146,8 @@ def main():
             log.info("开始新一轮 SMART 信息采集...")
 
             pg_table = cfg["postgres"]["table"]
-            safe_table, existing = _ensure_schema(pg_conn, pg_table)
+            safe_table = None
+            existing = set()
 
             for dev in cfg["devices"]:
                 output = run_smartctl(ssh, dev["cmd"])
@@ -170,10 +169,10 @@ def main():
                     log.info(
                         f"解析结果: serial={data.get('serial')}，共获取 {len(data)} 项"
                     )
-                    missing = [c for c in data if c not in existing]
-                    if missing:
-                        _add_columns(pg_conn, safe_table, existing, data)
-                        existing.update(missing)
+                    if safe_table is None:
+                        safe_table, existing = _ensure_schema(pg_conn, pg_table, data)
+                    else:
+                        _add_missing_columns(pg_conn, safe_table, existing, data)
                     _insert_row(pg_conn, safe_table, data)
                 else:
                     log.warning(f"SMART JSON 解析失败: {dev['cmd']}")
