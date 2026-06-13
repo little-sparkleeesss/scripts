@@ -4,7 +4,7 @@ trap 'echo "TRACE: line=${LINENO:-?} cmd=${BASH_COMMAND:-?} exit=${?}" >&2' ERR
 
 safe_source() {
     local conf="$1"
-    local line stripped
+    local line stripped key value
     local quoted_re='^[A-Z_][A-Z0-9_]*="[^"]*"$'
     local unquoted_re='^[A-Z_][A-Z0-9_]*=[^"`$()|&;<>]*$'
     while IFS= read -r line || [ -n "$line" ]; do
@@ -12,7 +12,11 @@ safe_source() {
         stripped="${stripped%"${stripped##*[![:space:]]}"}"
         [[ -z "${stripped}" ]] && continue
         if [[ "${stripped}" =~ ${quoted_re} ]]; then
-            declare -g "${stripped}"
+            key="${stripped%%=*}"
+            value="${stripped#*=}"
+            value="${value#\"}"
+            value="${value%\"}"
+            declare -g "${key}=${value}"
         elif [[ "${stripped}" =~ ${unquoted_re} ]]; then
             declare -g "${stripped}"
         else
@@ -29,8 +33,6 @@ CONF_PATH="${SCRIPT_DIR}/pg_backup.conf"
 # 解析配置中相对于 SCRIPT_DIR 的路径
 for _var in PG_BIN_DIR ZSTD_BIN_DIR DB_SSL_CA; do
     _val="${!_var:-}"
-    _val="${_val#\"}"
-    _val="${_val%\"}"
     if [ -n "${_val}" ] && [ "${_val#/}" = "${_val}" ]; then
         declare -g "$_var=${SCRIPT_DIR}/${_val}"
     fi
