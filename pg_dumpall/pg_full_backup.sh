@@ -11,9 +11,9 @@ safe_source() {
         stripped="${stripped%"${stripped##*[![:space:]]}"}"
         [[ -z "${stripped}" ]] && continue
         if [[ "${stripped}" =~ ${quoted_re} ]]; then
-            declare "${stripped}"
+            declare -g "${stripped}"
         elif [[ "${stripped}" =~ ${unquoted_re} ]]; then
-            declare "${stripped}"
+            declare -g "${stripped}"
         else
             printf "ERROR: 配置文件包含不安全的行: %s\n" "${line}" >&2
             return 1
