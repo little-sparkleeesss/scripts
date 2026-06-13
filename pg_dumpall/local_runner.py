@@ -2,6 +2,8 @@ import os
 import re
 import subprocess
 import sys
+from queue import Empty, Queue
+from threading import Thread
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -34,6 +36,13 @@ def _resolve_path(conf_dir, value):
     return value
 
 
+def _pipe_reader(pipe, tag, log_func, output_queue):
+    for raw in pipe:
+        for line in raw.decode("utf-8", errors="ignore").splitlines():
+            output_queue.put((tag, log_func, line))
+    pipe.close()
+
+
 def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     script_path = os.path.join(current_dir, "pg_full_backup.sh")
@@ -52,23 +61,45 @@ def main():
             stderr=subprocess.PIPE,
             env=os.environ.copy(),
         )
-        stdout, stderr = process.communicate()
 
-        stdout_text = stdout.decode("utf-8", errors="ignore")
-        stderr_text = stderr.decode("utf-8", errors="ignore")
-
-        if stderr_text:
-            for line in stderr_text.splitlines():
-                logger.error(f"[STDERR] {line}")
+        output_queue = Queue()
+        threads = [
+            Thread(target=_pipe_reader, args=(process.stdout, "STDOUT", logger.info, output_queue), daemon=True),
+            Thread(target=_pipe_reader, args=(process.stderr, "STDERR", logger.error, output_queue), daemon=True),
+        ]
+        for t in threads:
+            t.start()
 
         backup_file = None
-        for line in stdout_text.splitlines():
-            logger.info(f"[STDOUT] {line}")
-            m = BACKUP_FILE_RE.search(line)
-            if m:
-                backup_file = m.group(1).strip()
+        any_output = False
+        while process.poll() is None:
+            try:
+                tag, log_func, line = output_queue.get(timeout=0.2)
+                any_output = True
+                log_func(f"[{tag}] {line}")
+                if tag == "STDOUT":
+                    m = BACKUP_FILE_RE.search(line)
+                    if m:
+                        backup_file = m.group(1).strip()
+            except Empty:
+                pass
 
-        if not stderr_text and not stdout_text:
+        for t in threads:
+            t.join(timeout=1)
+
+        while not output_queue.empty():
+            try:
+                tag, log_func, line = output_queue.get_nowait()
+                any_output = True
+                log_func(f"[{tag}] {line}")
+                if tag == "STDOUT":
+                    m = BACKUP_FILE_RE.search(line)
+                    if m:
+                        backup_file = m.group(1).strip()
+            except Empty:
+                break
+
+        if not any_output:
             logger.warning("子进程无任何输出 (stdout+stderr 均为空)")
 
         if process.returncode != 0:
