@@ -1,5 +1,4 @@
 import os
-import pty
 import re
 import subprocess
 import sys
@@ -43,9 +42,18 @@ def _pipe_reader(pipe, tag, log_func, output_queue):
         if not raw:
             break
         buf += raw
-        *lines, buf = buf.split(b"\n")
-        for line in lines:
-            output_queue.put((tag, log_func, line.decode("utf-8", errors="ignore")))
+        while True:
+            best_pos, best_len = -1, 0
+            for sep in (b"\r\n", b"\r", b"\n"):
+                pos = buf.find(sep)
+                if pos != -1 and (best_pos == -1 or pos < best_pos):
+                    best_pos, best_len = pos, len(sep)
+            if best_pos == -1:
+                break
+            line = buf[:best_pos]
+            buf = buf[best_pos + best_len:]
+            if line:
+                output_queue.put((tag, log_func, line.decode("utf-8", errors="ignore")))
     if buf:
         output_queue.put((tag, log_func, buf.decode("utf-8", errors="ignore")))
     pipe.close()
@@ -63,21 +71,17 @@ def main():
         sys.exit(1)
 
     try:
-        stderr_master, stderr_slave = pty.openpty()
-
         process = subprocess.Popen(
             ["bash", script_path],
             stdout=subprocess.PIPE,
-            stderr=stderr_slave,
-            pass_fds=(stderr_slave,),
+            stderr=subprocess.PIPE,
             env=os.environ.copy(),
         )
-        os.close(stderr_slave)
 
         output_queue = Queue()
         threads = [
             Thread(target=_pipe_reader, args=(process.stdout, "STDOUT", logger.info, output_queue), daemon=True),
-            Thread(target=_pipe_reader, args=(os.fdopen(stderr_master, "rb", buffering=0), "STDERR", logger.error, output_queue), daemon=True),
+            Thread(target=_pipe_reader, args=(process.stderr, "STDERR", logger.error, output_queue), daemon=True),
         ]
         for t in threads:
             t.start()
