@@ -48,4 +48,4 @@ traffic_monitor/config.yaml
 vaultwarden_sync/config.yaml
 zfs_snapshot/config.yaml
 pg_dumpall/pg_backup.conf
-pg_start_backup/pg_backup.conf
+pg_start_backup/config.yaml

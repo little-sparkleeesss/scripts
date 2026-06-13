@@ -1,0 +1,18 @@
+postgres:
+  host: "<your_pg_host>"
+  port: 5432
+  database: "postgres"
+  user: "<your_pg_user>"
+  password: "<YOUR_PASSWORD>"
+  ssl_mode: "verify-full"
+  ssl_root_cert: "../assets/certs/Internal_Root_CA.crt"
+  mtls:
+    enabled: false
+    client_cert: "/etc/ssl/certs/pg_client.crt"
+    client_key: "/etc/ssl/private/pg_client.key"
+    # 如果私钥受密码保护，填写下方密码（脚本会用 openssl 解密为临时文件）
+    #client_key_password: "optional_passphrase"
+
+# 备份标签（传递给 pg_backup_start）和等待时长（秒）
+backup_label: "scheduled_backup"
+delay_seconds: 600
