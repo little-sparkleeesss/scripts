@@ -26,7 +26,7 @@ CONF_PATH="${SCRIPT_DIR}/pg_backup.conf"
 [ -f "${CONF_PATH}" ] && safe_source "${CONF_PATH}" || { echo "ERROR: 配置文件不存在"; exit 1; }
 
 # 解析配置中相对于 SCRIPT_DIR 的路径
-for _var in PG_BIN_DIR DB_SSL_CA NAS_PRIVATE_KEY; do
+for _var in PG_BIN_DIR ZSTD_BIN_DIR DB_SSL_CA NAS_PRIVATE_KEY; do
     _val="${!_var:-}"
     _val="${_val#\"}"
     _val="${_val%\"}"
@@ -38,14 +38,18 @@ done
 # -------------------------- 1. 工具路径动态解析 --------------------------
 get_binary() {
     local cmd=$1
-    local custom_dir=$2
-    if [ -n "${custom_dir}" ] && [ -x "${custom_dir}/${cmd}" ]; then
-        echo "${custom_dir}/${cmd}"
-    elif command -v "$cmd" &> /dev/null; then
-        command -v "$cmd"
-    else
-        echo "ERROR: 未找到工具: ${cmd}" >&2; exit 1
+    local custom_path=$2
+    if [ -n "${custom_path}" ]; then
+        if [ -f "${custom_path}" ] && [ -x "${custom_path}" ]; then
+            echo "${custom_path}"
+            return 0
+        elif [ -x "${custom_path}/${cmd}" ]; then
+            echo "${custom_path}/${cmd}"
+            return 0
+        fi
     fi
+    command -v "$cmd" 2>/dev/null && return 0
+    echo "ERROR: 未找到工具: ${cmd}" >&2; exit 1
 }
 
 PG_DUMPALL=$(get_binary "pg_dumpall" "${PG_BIN_DIR:-}")
