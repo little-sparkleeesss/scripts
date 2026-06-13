@@ -1,4 +1,5 @@
 import os
+import pty
 import re
 import subprocess
 import sys
@@ -37,9 +38,16 @@ def _resolve_path(conf_dir, value):
 
 
 def _pipe_reader(pipe, tag, log_func, output_queue):
+    buf = b""
     for raw in pipe:
-        for line in raw.decode("utf-8", errors="ignore").splitlines():
-            output_queue.put((tag, log_func, line))
+        if not raw:
+            break
+        buf += raw
+        *lines, buf = buf.split(b"\n")
+        for line in lines:
+            output_queue.put((tag, log_func, line.decode("utf-8", errors="ignore")))
+    if buf:
+        output_queue.put((tag, log_func, buf.decode("utf-8", errors="ignore")))
     pipe.close()
 
 
@@ -55,17 +63,21 @@ def main():
         sys.exit(1)
 
     try:
+        stderr_master, stderr_slave = pty.openpty()
+
         process = subprocess.Popen(
             ["bash", script_path],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=stderr_slave,
+            pass_fds=(stderr_slave,),
             env=os.environ.copy(),
         )
+        os.close(stderr_slave)
 
         output_queue = Queue()
         threads = [
             Thread(target=_pipe_reader, args=(process.stdout, "STDOUT", logger.info, output_queue), daemon=True),
-            Thread(target=_pipe_reader, args=(process.stderr, "STDERR", logger.error, output_queue), daemon=True),
+            Thread(target=_pipe_reader, args=(os.fdopen(stderr_master, "rb", buffering=0), "STDERR", logger.error, output_queue), daemon=True),
         ]
         for t in threads:
             t.start()
