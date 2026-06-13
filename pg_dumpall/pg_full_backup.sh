@@ -28,8 +28,10 @@ CONF_PATH="${SCRIPT_DIR}/pg_backup.conf"
 # 解析配置中相对于 SCRIPT_DIR 的路径
 for _var in PG_BIN_DIR DB_SSL_CA NAS_PRIVATE_KEY; do
     _val="${!_var:-}"
+    _val="${_val#\"}"
+    _val="${_val%\"}"
     if [ -n "${_val}" ] && [ "${_val#/}" = "${_val}" ]; then
-        declare "$_var=${SCRIPT_DIR}/${_val}"
+        declare -g "$_var=${SCRIPT_DIR}/${_val}"
     fi
 done
 

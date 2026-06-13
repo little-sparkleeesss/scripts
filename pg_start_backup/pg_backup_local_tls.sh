@@ -37,8 +37,10 @@ log "已加载配置：$CONFIG_FILE"
 # 解析配置中相对于 SCRIPT_DIR 的路径
 for _var in PG_BIN CA_CERT; do
     _val="${!_var:-}"
+    _val="${_val#\"}"
+    _val="${_val%\"}"
     if [ -n "${_val}" ] && [ "${_val#/}" = "${_val}" ]; then
-        declare "$_var=${SCRIPT_DIR}/${_val}"
+        declare -g "$_var=${SCRIPT_DIR}/${_val}"
     fi
 done
 
