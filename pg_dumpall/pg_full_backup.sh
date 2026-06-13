@@ -55,7 +55,8 @@ get_binary() {
 
 PG_DUMPALL=$(get_binary "pg_dumpall" "${PG_BIN_DIR:-}")
 ZSTD=$(get_binary "zstd" "${ZSTD_BIN_DIR:-}")
-SCP=$(command -v scp)
+SCP=$(command -v scp || true)
+[ -z "${SCP}" ] && { echo "ERROR: scp 未安装" >&2; exit 1; }
 
 # -------------------------- 2. 执行数据库备份 --------------------------
 backup_file="${LOCAL_STAGING_DIR}/${BACKUP_PREFIX}_$(date +%Y%m%d_%H%M%S).sql.zst"
