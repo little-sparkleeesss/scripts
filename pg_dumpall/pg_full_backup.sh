@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap 'echo "TRACE: line=${LINENO:-?} cmd=${BASH_COMMAND:-?} exit=${?}" >&2' ERR
 
 safe_source() {
     local conf="$1"

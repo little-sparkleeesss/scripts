@@ -28,11 +28,16 @@ def main():
         )
         stdout, stderr = process.communicate()
 
-        for line in stderr.decode("utf-8", errors="ignore").splitlines():
-            logger.error(f"[STDERR] {line}")
+        if stderr:
+            for line in stderr.decode("utf-8", errors="ignore").splitlines():
+                logger.error(f"[STDERR] {line}")
 
-        for line in stdout.decode("utf-8", errors="ignore").splitlines():
-            logger.info(f"[STDOUT] {line}")
+        if stdout:
+            for line in stdout.decode("utf-8", errors="ignore").splitlines():
+                logger.info(f"[STDOUT] {line}")
+
+        if not stdout and not stderr:
+            logger.warning("子进程无任何输出 (stdout+stderr 均为空)")
 
         if process.returncode == 0:
             logger.info("所有流水线阶段执行成功。")
