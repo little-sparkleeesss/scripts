@@ -104,8 +104,11 @@ def run_remote_cmd(ssh_client, cmd, timeout=300):
     stderr_text = stderr.read().decode()
     exit_code = stdout.channel.recv_exit_status()
     if exit_code != 0:
-        log.error(f"远程命令失败 (exit={exit_code}): {stderr_text}")
-        raise RuntimeError(f"远程命令失败 (exit={exit_code})")
+        msg = f"远程命令失败 (exit={exit_code})"
+        if stderr_text:
+            msg += f"\n{stderr_text.rstrip()}"
+        log.error(msg)
+        raise RuntimeError(msg)
     return stdout_text
 
 

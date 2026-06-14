@@ -56,7 +56,11 @@ def create_snapshots(ssh, cfg, timestamp):
             run_remote_cmd(ssh, cmd)
             log.info(f"快照已创建: {full} (recursive={recursive})")
         except RuntimeError as e:
-            log.error(f"快照创建失败: {full} — {e}")
+            msg = str(e)
+            if "dataset already exists" in msg.lower():
+                log.info(f"快照已存在（可能由上层递归创建）: {full}")
+            else:
+                log.error(f"快照创建失败: {full} — {e}")
 
 
 def cleanup_old_snapshots(ssh, cfg, now):
@@ -120,6 +124,22 @@ def cleanup_old_snapshots(ssh, cfg, now):
             log.warning(f"删除快照失败: {snap} — {e}")
 
 
+def _check_overlapping_datasets(datasets):
+    for i, a in enumerate(datasets):
+        for b in datasets[i + 1:]:
+            a_name, b_name = a["name"], b["name"]
+            if a.get("recursive") and (b_name == a_name or b_name.startswith(a_name + "/")):
+                log.warning(
+                    f"数据集 {b_name!r} 已被 {a_name!r} (recursive=true) 覆盖，"
+                    f"建议从配置中移除以避免重复操作"
+                )
+            if b.get("recursive") and (a_name == b_name or a_name.startswith(b_name + "/")):
+                log.warning(
+                    f"数据集 {a_name!r} 已被 {b_name!r} (recursive=true) 覆盖，"
+                    f"建议从配置中移除以避免重复操作"
+                )
+
+
 def main():
     cfg = load_yaml(CONFIG_FILE)
     resolve_ssh_paths(cfg["ssh"], SCRIPT_DIR)
@@ -131,6 +151,8 @@ def main():
     if not ZFS_NAME_RE.match(prefix):
         log.error(f"snapshot.prefix 包含非法字符: {prefix!r}")
         sys.exit(1)
+
+    _check_overlapping_datasets(cfg["snapshot"]["datasets"])
 
     ssh = connect_ssh(cfg["ssh"])
 
