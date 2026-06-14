@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import shlex
 import sys
 from datetime import datetime, timedelta
 
@@ -20,6 +21,8 @@ SNAPSHOT_RE = re.compile(
     r"@([\w-]+)-(\d{4}_\d{2}_\d{2}-\d{6})$"
 )
 ZFS_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-:/@]*$")
+
+MAX_DELETIONS = 100
 
 
 def _parse_snapshot_name(full_name):
@@ -44,7 +47,10 @@ def create_snapshots(ssh, cfg, timestamp):
         full = f"{dataset}@{snap_name}"
 
         flag = " -r" if recursive else ""
-        cmd = f"zfs snapshot{flag} {full}"
+        cmd = (
+            f"zfs snapshot{flag}"
+            f" {shlex.quote(full)}"
+        )
 
         try:
             run_remote_cmd(ssh, cmd)
@@ -58,12 +64,18 @@ def cleanup_old_snapshots(ssh, cfg, now):
     retention_days = cfg["snapshot"].get("retention_days", 30)
     cutoff = now.replace(microsecond=0) - timedelta(days=retention_days)
 
+    candidates = []
+
     for entry in cfg["snapshot"]["datasets"]:
         dataset = entry["name"]
         recursive = entry.get("recursive", False)
 
         flag = " -r" if recursive else ""
-        list_cmd = f"zfs list -H -t snapshot -o name{flag} {dataset}"
+        escaped_dataset = shlex.quote(dataset)
+        list_cmd = (
+            f"zfs list -H -t snapshot -o name{flag}"
+            f" {escaped_dataset}"
+        )
 
         try:
             output = run_remote_cmd(ssh, list_cmd)
@@ -84,16 +96,41 @@ def cleanup_old_snapshots(ssh, cfg, now):
                 continue
 
             if snap_time < cutoff:
-                try:
-                    run_remote_cmd(ssh, f"zfs destroy {line}")
-                    log.info(f"已删除过期快照: {line}")
-                except RuntimeError as e:
-                    log.warning(f"删除快照失败: {line} — {e}")
+                candidates.append(line)
+
+    if not candidates:
+        return
+
+    candidates = sorted(set(candidates))
+
+    if len(candidates) > MAX_DELETIONS:
+        log.error(
+            f"待删除快照数量 ({len(candidates)}) 超过安全上限 ({MAX_DELETIONS})，"
+            f"跳过清理以防止误删。请检查 retention_days 或手动处理。"
+        )
+        return
+
+    log.info(f"共 {len(candidates)} 个过期快照待删除")
+
+    for snap in candidates:
+        try:
+            run_remote_cmd(ssh, f"zfs destroy {shlex.quote(snap)}")
+            log.info(f"已删除过期快照: {snap}")
+        except RuntimeError as e:
+            log.warning(f"删除快照失败: {snap} — {e}")
 
 
 def main():
     cfg = load_yaml(CONFIG_FILE)
     resolve_ssh_paths(cfg["ssh"], SCRIPT_DIR)
+
+    prefix = cfg["snapshot"]["prefix"]
+    if not prefix or not prefix.strip():
+        log.error("snapshot.prefix 不能为空，拒绝运行以避免误删其他快照")
+        sys.exit(1)
+    if not ZFS_NAME_RE.match(prefix):
+        log.error(f"snapshot.prefix 包含非法字符: {prefix!r}")
+        sys.exit(1)
 
     ssh = connect_ssh(cfg["ssh"])
 
