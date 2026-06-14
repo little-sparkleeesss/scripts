@@ -36,6 +36,42 @@ def clean_column_name(name):
     return safe
 
 
+NVME_SKIP_KEYS = {"nsid"}
+
+TEXT_COLS = {"serial", "model", "device_type"}
+
+
+def _column_type(col, val):
+    if col == "timestamp":
+        return "TIMESTAMPTZ"
+    if col in TEXT_COLS:
+        return "TEXT"
+    if isinstance(val, bool):
+        return "BOOLEAN"
+    if isinstance(val, int):
+        return "BIGINT"
+    if isinstance(val, float):
+        return "DOUBLE PRECISION"
+    return "JSONB"
+
+
+def _parse_nvme_health(data, result):
+    health = data.get("nvme_smart_health_information_log", {})
+    if not health:
+        return
+    for key, val in health.items():
+        if key in NVME_SKIP_KEYS:
+            continue
+        if isinstance(val, bool):
+            result[key] = val
+        elif isinstance(val, int):
+            result[key] = val
+        elif isinstance(val, float):
+            result[key] = val
+        else:
+            result[key] = json.dumps(val)
+
+
 def parse_smart_json(json_text):
     try:
         data = json.loads(json_text)
@@ -47,18 +83,23 @@ def parse_smart_json(json_text):
     time_t = (data.get("local_time") or {}).get("time_t")
     ts = datetime.fromtimestamp(time_t, tz=timezone.utc) if time_t else None
 
+    device_type = (data.get("device") or {}).get("type", "")
+
     result = {
         "timestamp": ts,
         "model": data.get("model_name"),
         "serial": data.get("serial_number"),
+        "device_type": device_type or "unknown",
     }
+
+    if data.get("smart_status", {}).get("passed") is not None:
+        result["smart_status_passed"] = data["smart_status"]["passed"]
 
     attributes = data.get("ata_smart_attributes", {}).get("table", [])
     for attr in attributes:
         name = attr.get("name")
         if not name:
             continue
-
         clean_name = clean_column_name(name)
         result[clean_name] = json.dumps({
             "value": attr.get("value"),
@@ -66,6 +107,9 @@ def parse_smart_json(json_text):
             "threshold": attr.get("thresh"),
             "raw": attr.get("raw", {}).get("string"),
         })
+
+    if device_type == "nvme" or (not attributes and not device_type):
+        _parse_nvme_health(data, result)
 
     return result
 
@@ -83,9 +127,7 @@ def _ensure_schema(conn, table, sample_data):
         log.info("创建新表结构...")
         create_fields = []
         for col in sample_data:
-            ct = "TIMESTAMPTZ" if col == "timestamp" \
-                else "TEXT" if col in ("serial", "model") \
-                else "JSONB"
+            ct = _column_type(col, sample_data[col])
             create_fields.append(f'"{col}" {ct}')
         cur.execute(f'''
             CREATE TABLE IF NOT EXISTS "{safe_table}" (
@@ -110,9 +152,7 @@ def _add_missing_columns(conn, safe_table, existing, data):
         return
     cur = conn.cursor()
     for col in missing:
-        ct = "TIMESTAMPTZ" if col == "timestamp" \
-            else "TEXT" if col in ("serial", "model") \
-            else "JSONB"
+        ct = _column_type(col, data[col])
         log.info(f"添加缺失字段: {col} ({ct})")
         cur.execute(f'ALTER TABLE "{safe_table}" ADD COLUMN IF NOT EXISTS "{col}" {ct}')
         existing.add(col)

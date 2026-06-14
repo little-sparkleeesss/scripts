@@ -108,7 +108,7 @@ class TestSataFullPipeline:
         assert data["serial"] == "WD-ABC12345"
         assert data["model"] == "WD Red Plus 4TB"
         assert data["timestamp"] == datetime(2021, 1, 1, tzinfo=timezone.utc)
-        assert len(data) == 6  # timestamp + serial + model + 3 attributes
+        assert len(data) == 7  # ts + serial + model + device_type + 3 attrs
 
         safe, existing = _ensure_schema(pg_conn, "smart_test", data)
         _insert_row(pg_conn, safe, data)
@@ -123,7 +123,80 @@ class TestSataFullPipeline:
         cur.close()
 
 
-# ── 已知限制：NVMe 设备 ─────────────────────────────────────────────
-# parse_smart_json 目前只处理 ata_smart_attributes.table (SATA)。
-# NVMe 的 nvme_smart_health_information_log 是扁平键值对，不会解析。
-# 看到真实 NVMe JSON 但此处不测试，因为当前生产环境全部是 SATA 盘。
+# ── NVMe 全链路 ────────────────────────────────────────────────────
+
+NVME_SMARTCTL_JSON = json.dumps({
+    "local_time": {"time_t": 1609459200},
+    "device": {"type": "nvme"},
+    "model_name": "Samsung SSD 980 PRO 1TB",
+    "serial_number": "NVME-REDACTED",
+    "smart_status": {"passed": True},
+    "nvme_smart_health_information_log": {
+        "nsid": -1,
+        "critical_warning": 0,
+        "temperature": 42,
+        "available_spare": 100,
+        "percentage_used": 1,
+        "data_units_read": 12345678,
+        "data_units_written": 87654321,
+        "power_on_hours": 5000,
+        "power_cycles": 200,
+        "unsafe_shutdowns": 3,
+        "media_errors": 0,
+    },
+})
+
+
+class TestNvmeFullPipeline:
+    def test_ssh_echo_nvme_parse_insert_query(self, ssh_client, pg_conn):
+        cmd = f"echo '{NVME_SMARTCTL_JSON}'"
+        output = run_remote_cmd(ssh_client, cmd)
+        assert "NVME-REDACTED" in output
+
+        data = parse_smart_json(output)
+        assert data is not None
+        assert data["device_type"] == "nvme"
+        assert data["serial"] == "NVME-REDACTED"
+        assert data["temperature"] == 42
+        assert isinstance(data["smart_status_passed"], bool)
+
+        safe, existing = _ensure_schema(pg_conn, "smart_test", data)
+        _insert_row(pg_conn, safe, data)
+
+        cur = pg_conn.cursor()
+        cur.execute("SELECT serial, device_type, temperature, power_on_hours, smart_status_passed FROM smart_test")
+        row = cur.fetchone()
+        assert row[0] == "NVME-REDACTED"
+        assert row[1] == "nvme"
+        assert row[2] == 42
+        assert row[3] == 5000
+        assert row[4] is True
+        cur.close()
+
+    def test_nvme_columns_have_correct_types(self, pg_conn):
+        data = parse_smart_json(NVME_SMARTCTL_JSON)
+        _ensure_schema(pg_conn, "smart_test", data)
+        _insert_row(pg_conn, "smart_test", data)
+
+        cur = pg_conn.cursor()
+        cur.execute("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'smart_test' AND table_schema = 'public'
+            AND column_name = 'temperature'
+        """)
+        assert cur.fetchone()[0] == "bigint"
+
+        cur.execute("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'smart_test' AND table_schema = 'public'
+            AND column_name = 'smart_status_passed'
+        """)
+        assert cur.fetchone()[0] == "boolean"
+
+        cur.execute("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'smart_test' AND table_schema = 'public'
+            AND column_name = 'device_type'
+        """)
+        assert cur.fetchone()[0] in ("text", "character varying")
+        cur.close()
