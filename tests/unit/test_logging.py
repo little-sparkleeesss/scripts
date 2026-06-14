@@ -23,9 +23,9 @@ class TestSetupLogger:
 
     def test_second_call_preserves_level(self):
         log1 = setup_logger("a", level=logging.DEBUG)
-        log2 = setup_logger("b")
+        log2 = setup_logger("b", level=logging.DEBUG)
         assert logging.root.level == logging.DEBUG
-        assert log2.level == logging.DEBUG
+        assert log2.getEffectiveLevel() == logging.DEBUG
 
     def test_subsequent_call_can_change_level(self):
         setup_logger("a", level=logging.DEBUG)

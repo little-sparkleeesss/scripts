@@ -16,6 +16,7 @@ class TestPgBackupStartStop:
 
         cur.execute("SELECT pg_backup_stop()")
         row = cur.fetchone()
+        assert row is not None
         cur.close()
 
     def test_conn_survives_sleep(self, pg_conn):

@@ -70,10 +70,10 @@ class TestSchemaAndInsert:
         _insert_row(pg_conn, safe, DATA2)
 
         cur = pg_conn.cursor()
-        cur.execute("SELECT serial, model, Spin_Up_Time FROM smart_test ORDER BY id")
+        cur.execute('SELECT serial, model, "Spin_Up_Time" FROM smart_test ORDER BY id')
         rows = cur.fetchall()
         assert len(rows) == 2
-        assert json.loads(rows[1][2])["value"] == 200
+        assert rows[1][2]["value"] == 200
         cur.close()
 
     def test_ensure_schema_idempotent(self, pg_conn):
@@ -114,11 +114,11 @@ class TestSataFullPipeline:
         _insert_row(pg_conn, safe, data)
 
         cur = pg_conn.cursor()
-        cur.execute("SELECT serial, model, Power_On_Hours FROM smart_test")
+        cur.execute('SELECT serial, model, "Power_On_Hours" FROM smart_test')
         row = cur.fetchone()
         assert row[0] == "WD-ABC12345"
         assert row[1] == "WD Red Plus 4TB"
-        p = json.loads(row[2])
+        p = row[2]
         assert p["raw"] == "12345"
         cur.close()
 

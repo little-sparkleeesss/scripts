@@ -13,9 +13,12 @@ _PGPASSWORD_RE = re.compile(r"(PGPASSWORD=)('[^']*'|\S+)", re.ASCII)
 
 def _parse_known_host_key(known_key_line):
     fields = known_key_line.split()
-    if len(fields) < 3:
+    if len(fields) < 2:
         raise ValueError(f"known_host_key 格式无效: {known_key_line!r}")
-    host, key_type, key_b64 = fields[0], fields[1], fields[2]
+    if len(fields) == 2:
+        key_type, key_b64 = fields[0], fields[1]
+    else:
+        _, key_type, key_b64 = fields[0], fields[1], fields[2]
     key_data = base64.b64decode(key_b64)
 
     if key_type == "ssh-ed25519":

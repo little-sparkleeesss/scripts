@@ -24,6 +24,8 @@ def load_yaml(path):
 
 
 def resolve_path(base_dir, relative_path):
+    if not relative_path:
+        return relative_path
     if os.path.isabs(relative_path):
         return relative_path
     return os.path.normpath(os.path.join(base_dir, relative_path))

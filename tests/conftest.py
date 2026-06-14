@@ -1,8 +1,8 @@
 import os
+import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -14,8 +14,8 @@ PODMAN = os.environ.get("PODMAN_BIN", "podman")
 PG_IMAGE = os.environ.get("PG_TEST_IMAGE", "docker.io/library/postgres:18")
 ALPINE_IMAGE = os.environ.get("ALPINE_TEST_IMAGE", "docker.io/library/alpine:3.21")
 MIRROR = os.environ.get("APK_MIRROR", "mirrors.tuna.tsinghua.edu.cn")
-SSH_PORT_BASE = int(os.environ.get("SSH_TEST_PORT_BASE", "22022"))
-PG_PORT = int(os.environ.get("PG_TEST_PORT", "25432"))
+
+_podman_available = shutil.which(PODMAN) is not None
 
 
 def _free_port():
@@ -43,11 +43,23 @@ def _wait_tcp(host, port, timeout=60):
     raise TimeoutError(f"{host}:{port} 未在 {timeout}s 内就绪")
 
 
+# ── podman availability guard ────────────────────────────────────────
+
+def pytest_configure(config):
+    if not _podman_available:
+        config.option.markexpr = "not integration"
+
+
 # ── session-scoped fixtures ──────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def _check_podman():
+    if not _podman_available:
+        pytest.skip("podman 不可用，跳过集成测试")
 
 
 @pytest.fixture(scope="session")
-def podman_network():
+def podman_network(_check_podman):
     name = f"pytest_net_{os.getpid()}"
     r = _podman_check("network", "exists", name)
     if r.returncode == 0:
@@ -73,7 +85,6 @@ def pg_container(podman_network):
         "-e", f"POSTGRES_USER={pg_user}",
         "-e", f"POSTGRES_DB={pg_db}",
         "-e", f"POSTGRES_PASSWORD={pg_pass}",
-        "-e", "POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256",
         PG_IMAGE,
     )
     try:
@@ -111,7 +122,7 @@ def ssh_container(podman_network, tmp_path_factory):
     priv_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.OpenSSH,
-        encryption=serialization.NoEncryption(),
+        encryption_algorithm=serialization.NoEncryption(),
     )
     key_path.write_bytes(priv_pem)
     key_path.chmod(0o600)
@@ -129,6 +140,7 @@ set -e
 sed -i 's|dl-cdn.alpinelinux.org|{MIRROR}|' /etc/apk/repositories
 apk add --no-cache openssh-server shadow
 
+adduser -D {ssh_user}
 echo "{ssh_user}:{ssh_pass}" | chpasswd
 
 mkdir -p /home/{ssh_user}/.ssh
@@ -158,7 +170,13 @@ echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
 
     _podman("cp", str(setup_sh), f"{container}:/setup.sh")
     _podman("exec", container, "/setup.sh")
-    _podman("exec", container, "/usr/sbin/sshd", "-D", "-e")
+    _podman("exec", "-d", container, "/usr/sbin/sshd", "-D", "-e")
+
+    raw_host_key = _podman(
+        "exec", container, "cat", "/etc/ssh/ssh_host_ed25519_key.pub"
+    ).stdout.strip()
+    host_key_parts = raw_host_key.split()
+    host_key = f"127.0.0.1 {host_key_parts[0]} {host_key_parts[1]}"
 
     try:
         _wait_tcp("127.0.0.1", port, timeout=90)
@@ -174,38 +192,49 @@ echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
         "password": ssh_pass,
         "key_path": str(key_path),
         "pubkey": pub_bytes.decode(),
+        "host_key": host_key,
     }
     _podman_check("rm", "-f", container)
 
 
 # ── function-scoped fixtures ─────────────────────────────────────────
 
-
 @pytest.fixture
 def pg_conn(pg_container):
     import psycopg2
-    conn = psycopg2.connect(
-        host=pg_container["host"],
-        port=pg_container["port"],
-        user=pg_container["user"],
-        password=pg_container["password"],
-        dbname=pg_container["dbname"],
-    )
-    conn.autocommit = True
-    yield conn
-    conn.close()
+
+    deadline = time.monotonic() + 30
+    last_err = None
+    while time.monotonic() < deadline:
+        try:
+            conn = psycopg2.connect(
+                host=pg_container["host"],
+                port=pg_container["port"],
+                user=pg_container["user"],
+                password=pg_container["password"],
+                dbname=pg_container["dbname"],
+            )
+            conn.autocommit = True
+            yield conn
+            conn.close()
+            return
+        except psycopg2.OperationalError as e:
+            last_err = e
+            time.sleep(1)
+    raise last_err
 
 
 @pytest.fixture
 def ssh_client(ssh_container):
     from lib.ssh_utils import connect_ssh
+
     cfg = {
         "host": ssh_container["host"],
         "port": ssh_container["port"],
         "user": ssh_container["user"],
         "password": ssh_container["password"],
         "key": ssh_container["key_path"],
-        "known_host_key": f"{ssh_container['host']} ssh-ed25519 {ssh_container['pubkey'].split()[1]}",
+        "known_host_key": ssh_container["host_key"],
     }
     client = connect_ssh(cfg)
     yield client

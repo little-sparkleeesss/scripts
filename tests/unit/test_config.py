@@ -67,6 +67,7 @@ class TestResolvePath:
 
     def test_empty_returns_empty(self):
         assert resolve_path("/tmp", "") == ""
+        assert resolve_path("/tmp", None) is None
 
 
 class TestScriptDir:

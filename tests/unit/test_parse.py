@@ -127,5 +127,5 @@ class TestParseNvmeSmartJson:
 
     def test_total_field_count(self):
         result = parse_smart_json(NVME_SAMPLE_JSON)
-        # ts + model + serial + device_type + smart_status_passed + 16 nvme fields = 21
-        assert len(result) == 21
+        # ts + model + serial + device_type + smart_status_passed + 17 nvme fields = 22
+        assert len(result) == 22

@@ -36,7 +36,7 @@ class TestConnectSSH:
             "port": ssh_container["port"],
             "user": ssh_container["user"],
             "password": ssh_container["password"],
-            "known_host_key": ssh_container["pubkey"],
+            "known_host_key": ssh_container["host_key"],
         }
         client = connect_ssh(cfg)
         try:
@@ -51,7 +51,7 @@ class TestConnectSSH:
             "port": ssh_container["port"],
             "user": ssh_container["user"],
             "key": ssh_container["key_path"],
-            "known_host_key": ssh_container["pubkey"],
+            "known_host_key": ssh_container["host_key"],
         }
         client = connect_ssh(cfg)
         try:
