@@ -3,10 +3,12 @@ from datetime import datetime, timezone
 
 import pytest
 
+from lib.ssh_utils import run_remote_cmd
 from smart_monitor.smart_push import (
     _add_missing_columns,
     _ensure_schema,
     _insert_row,
+    parse_smart_json,
 )
 
 
@@ -79,3 +81,49 @@ class TestSchemaAndInsert:
         safe2, existing2 = _ensure_schema(pg_conn, "smart_test", DATA1)
         assert safe1 == safe2
         assert existing1 == existing2
+
+
+SATA_SMARTCTL_JSON = json.dumps({
+    "local_time": {"time_t": 1609459200},
+    "model_name": "WD Red Plus 4TB",
+    "serial_number": "WD-ABC12345",
+    "ata_smart_attributes": {
+        "table": [
+            {"name": "Raw_Read_Error_Rate", "value": 100, "worst": 100, "thresh": 50, "raw": {"string": "0"}},
+            {"name": "Reallocated_Sector_Ct", "value": 100, "worst": 100, "thresh": 10, "raw": {"string": "0"}},
+            {"name": "Power_On_Hours", "value": 98, "worst": 98, "thresh": 0, "raw": {"string": "12345"}},
+        ]
+    },
+})
+
+
+class TestSataFullPipeline:
+    def test_ssh_echo_parse_insert_query(self, ssh_client, pg_conn):
+        cmd = f"echo '{SATA_SMARTCTL_JSON}'"
+        output = run_remote_cmd(ssh_client, cmd)
+        assert "WD-ABC12345" in output
+
+        data = parse_smart_json(output)
+        assert data is not None
+        assert data["serial"] == "WD-ABC12345"
+        assert data["model"] == "WD Red Plus 4TB"
+        assert data["timestamp"] == datetime(2021, 1, 1, tzinfo=timezone.utc)
+        assert len(data) == 6  # timestamp + serial + model + 3 attributes
+
+        safe, existing = _ensure_schema(pg_conn, "smart_test", data)
+        _insert_row(pg_conn, safe, data)
+
+        cur = pg_conn.cursor()
+        cur.execute("SELECT serial, model, Power_On_Hours FROM smart_test")
+        row = cur.fetchone()
+        assert row[0] == "WD-ABC12345"
+        assert row[1] == "WD Red Plus 4TB"
+        p = json.loads(row[2])
+        assert p["raw"] == "12345"
+        cur.close()
+
+
+# ── 已知限制：NVMe 设备 ─────────────────────────────────────────────
+# parse_smart_json 目前只处理 ata_smart_attributes.table (SATA)。
+# NVMe 的 nvme_smart_health_information_log 是扁平键值对，不会解析。
+# 看到真实 NVMe JSON 但此处不测试，因为当前生产环境全部是 SATA 盘。
