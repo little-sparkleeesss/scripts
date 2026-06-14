@@ -211,8 +211,8 @@ def main():
                     )
                     if safe_table is None:
                         safe_table, existing = _ensure_schema(pg_conn, pg_table, data)
-                    else:
-                        _add_missing_columns(pg_conn, safe_table, existing, data)
+
+                    _add_missing_columns(pg_conn, safe_table, existing, data)
                     _insert_row(pg_conn, safe_table, data)
                 else:
                     log.warning(f"SMART JSON 解析失败: {dev['cmd']}")
