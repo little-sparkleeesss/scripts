@@ -42,6 +42,7 @@ assets/keys/*
 assets/tools/*
 !assets/tools/.gitkeep
 !assets/tools/postgresql-portable
+!assets/tools/zstd-static
 
 # Private config files (use .example templates to create your own)
 smart_monitor/config.yaml

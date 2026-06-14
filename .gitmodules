@@ -1,3 +1,6 @@
 [submodule "assets/tools/postgresql-portable"]
 	path = assets/tools/postgresql-portable
 	url = https://github.com/little-sparkleeesss/postgresql-portable.git
+[submodule "assets/tools/zstd-static"]
+	path = assets/tools/zstd-static
+	url = https://github.com/little-sparkleeesss/zstd-static.git
