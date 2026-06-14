@@ -15,7 +15,7 @@ from lib.ssh_utils import (
 
 class TestParseKnownHostKey:
     def test_ed25519_2_fields(self):
-        line = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBOGvqDlcJ7gXQKmwWmBjKaKm0nBVLz"
+        line = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGmMTBeyxlopzEh/O0hymS/WZ/FQd0wKDuzrfEykG52g"
         pkey = _parse_known_host_key(line)
         assert pkey is not None
 
