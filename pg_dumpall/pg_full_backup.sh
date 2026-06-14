@@ -42,6 +42,7 @@ done
 get_binary() {
     local cmd=$1
     local custom_path=$2
+    # 1. 指定路径 → 直接用于或拼接目录/CMD
     if [ -n "${custom_path}" ]; then
         if [ -f "${custom_path}" ] && [ -x "${custom_path}" ]; then
             echo "${custom_path}"
@@ -51,7 +52,16 @@ get_binary() {
             return 0
         fi
     fi
+    # 2. 系统 PATH
     command -v "$cmd" 2>/dev/null && return 0
+    # 3. assets/tools 自动发现
+    local found
+    found=$(find "${SCRIPT_DIR}/../assets/tools" -maxdepth 5 \
+        -name "$cmd" -type f 2>/dev/null | head -1)
+    if [ -n "$found" ] && [ -x "$found" ]; then
+        echo "$found"
+        return 0
+    fi
     echo "ERROR: 未找到工具: ${cmd}" >&2; exit 1
 }
 
