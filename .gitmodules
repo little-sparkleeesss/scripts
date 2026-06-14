@@ -1,0 +1,3 @@
+[submodule "assets/tools/postgresql-portable"]
+	path = assets/tools/postgresql-portable
+	url = https://github.com/little-sparkleeesss/postgresql-portable.git
