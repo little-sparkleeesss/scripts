@@ -99,10 +99,13 @@ def sync_data(cfg, tz_offset):
         )
 
         if interface_filter:
+            # interface 列是 INTEGER 外键 → interface(id)，用 JOIN 按名字过滤
             sqlite_cursor.execute(
-                f"SELECT {', '.join(sync_columns)} FROM {sqlite_table} "
-                f"WHERE interface = ? "
-                f"ORDER BY {sync_columns[ts_index]} ASC",
+                f"SELECT h.id, h.date, h.rx, h.tx "
+                f"FROM {sqlite_table} h "
+                f"JOIN interface i ON h.interface = i.id "
+                f"WHERE i.name = ? "
+                f"ORDER BY h.date ASC",
                 (interface_filter,)
             )
         else:
