@@ -63,6 +63,7 @@ def sync_data(cfg, tz_offset):
 
         sync_columns = cfg["sync"]["columns"]
         column_mapping = cfg["sync"].get("column_mapping", {})
+        interface_filter = cfg["sync"].get("interface_filter")
 
         sqlite_pk_name = cfg["sync"]["primary_key"]
 
@@ -97,10 +98,18 @@ def sync_data(cfg, tz_offset):
             f"PostgreSQL 当前最大 ID: {current_max_id}, 最后同步时间: {last_sync_ts}"
         )
 
-        sqlite_cursor.execute(
-            f"SELECT {', '.join(sync_columns)} FROM {sqlite_table} "
-            f"ORDER BY {sync_columns[ts_index]} ASC"
-        )
+        if interface_filter:
+            sqlite_cursor.execute(
+                f"SELECT {', '.join(sync_columns)} FROM {sqlite_table} "
+                f"WHERE interface = ? "
+                f"ORDER BY {sync_columns[ts_index]} ASC",
+                (interface_filter,)
+            )
+        else:
+            sqlite_cursor.execute(
+                f"SELECT {', '.join(sync_columns)} FROM {sqlite_table} "
+                f"ORDER BY {sync_columns[ts_index]} ASC"
+            )
         sqlite_rows = sqlite_cursor.fetchall()
 
         insert_rows = []

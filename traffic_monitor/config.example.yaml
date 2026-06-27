@@ -23,6 +23,7 @@ postgres:
 sync:
   sqlite_table: hour
   primary_key: id
+  interface_filter: "ens3"   # ★ 只同步指定接口的流量，避免 Docker/veth/lo 等干扰
   columns:
     - id
     - date
